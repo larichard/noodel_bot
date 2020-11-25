@@ -10,15 +10,17 @@ from discord.ext import commands
 from music import Music
 
 
-bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"),
+bot = commands.Bot(command_prefix=commands.when_mentioned_or("&"),
                    description='i am noodel bot')
 
+music_bot = Music(bot)
 @bot.event
 async def on_ready():
     print('Logged in as {0} ({0.id})'.format(bot.user))
     print('------')
-    bot.loop.create_task(Music(bot).audio_player_task())
+    task = music_bot.audio_player_task()
+    await bot.loop.create_task(task)
 
 bot.add_cog(reply.Reply(bot))
-bot.add_cog(music.Music(bot))
+bot.add_cog(music_bot)
 bot.run(os.environ.get('KEY'))

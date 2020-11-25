@@ -57,17 +57,30 @@ class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.songs = asyncio.Queue()
+
+        # mutex for if current song is playing
+        # clear if ready to play, set when processing next song
         self.play_next_song = asyncio.Event()
+        # current url of song, synced with mutxed
+        self.current_song = None
 
     async def audio_player_task(self):
         while True:
+            ctx, url = await self.songs.get()
+            # could problably move this back to play to allow for parallel downloads PogU
+            current = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
             self.play_next_song.clear()
-            current = await self.songs.get()
-            current.start()
+            self.current_song = url
+            ctx.voice_client.play(current, after=self.after_playing_song)
             await self.play_next_song.wait()
 
-    def toggle_next(self):
-        bot.loop.call_soon_threadsafe(self.play_next_song.set)
+    def after_playing_song(self, error):
+        if error:
+            print("error during song")
+            return
+
+        self.play_next_song.set()
+        self.current_song = None
 
     @commands.command()
     async def join(self, ctx, *, channel: discord.VoiceChannel):
@@ -82,16 +95,14 @@ class Music(commands.Cog):
     async def play(self, ctx, *, url):
         """Plays from a url (almost anything youtube_dl supports)"""
 
-        async with ctx.typing():
-            #does not play if video is longer than 10 minutes (600 seconds)
-            lengthCheck = await YTDLSource.from_url(url, loop=self.bot.loop, stream = True)
-            if(lengthCheck.duration > 600):
-                await ctx.send('Too long!')
+        if ctx.voice_client is None:
+            if ctx.author.voice:
+                await ctx.author.voice.channel.connect()
             else:
-                player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
-                await self.songs.put(player)
-                #ctx.voice_client.play(player, after=lambda e: print('Player error: %s' % e) if e else None)
-                #await ctx.send('Now playing: {} ({}m:{}s)'.format(player.title, (int(player.duration//60)), int(player.duration%60)))
+                await ctx.send("You are not connected to a voice channel.")
+                raise commands.CommandError("Author not connected to a voice channel.")
+
+        await self.songs.put((ctx, url))
 
     @commands.command()
     async def volume(self, ctx, volume: int):
@@ -109,6 +120,11 @@ class Music(commands.Cog):
 
         return await ctx.send('Skipped!')
 
+    @commands.command()
+    async def queue(self, ctx):
+        """Skips the current video in the queue"""
+
+        return await ctx.send(f"{self.songs.qsize()} item(s) in queue")
 
     @commands.command()
     async def stop(self, ctx):
@@ -116,16 +132,3 @@ class Music(commands.Cog):
 
         await ctx.voice_client.disconnect()
         return await ctx.send('watch liz and the blue bird')
-
-    @play.before_invoke
-    #@yt.before_invoke
-    #@stream.before_invoke
-    async def ensure_voice(self, ctx):
-        if ctx.voice_client is None:
-            if ctx.author.voice:
-                await ctx.author.voice.channel.connect()
-            else:
-                await ctx.send("You are not connected to a voice channel.")
-                raise commands.CommandError("Author not connected to a voice channel.")
-        elif ctx.voice_client.is_playing():
-            ctx.voice_client.stop()
