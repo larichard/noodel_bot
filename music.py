@@ -28,6 +28,9 @@ ffmpeg_options = {
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
+#add queue to work as playlist
+
+
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
@@ -53,6 +56,18 @@ class YTDLSource(discord.PCMVolumeTransformer):
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.songs = asyncio.Queue()
+        self.play_next_song = asyncio.Event()
+
+    async def audio_player_task(self):
+        while True:
+            self.play_next_song.clear()
+            current = await self.songs.get()
+            current.start()
+            await self.play_next_song.wait()
+
+    def toggle_next(self):
+        bot.loop.call_soon_threadsafe(self.play_next_song.set)
 
     @commands.command()
     async def join(self, ctx, *, channel: discord.VoiceChannel):
@@ -73,9 +88,10 @@ class Music(commands.Cog):
             if(lengthCheck.duration > 600):
                 await ctx.send('Too long!')
             else:
-                player = await YTDLSource.from_url(url, loop=self.bot.loop)
-                ctx.voice_client.play(player, after=lambda e: print('Player error: %s' % e) if e else None)
-                await ctx.send('Now playing: {} ({}m:{}s)'.format(player.title, (int(player.duration//60)), int(player.duration%60)))
+                player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
+                await self.songs.put(player)
+                #ctx.voice_client.play(player, after=lambda e: print('Player error: %s' % e) if e else None)
+                #await ctx.send('Now playing: {} ({}m:{}s)'.format(player.title, (int(player.duration//60)), int(player.duration%60)))
 
     @commands.command()
     async def volume(self, ctx, volume: int):
@@ -86,6 +102,13 @@ class Music(commands.Cog):
 
         ctx.voice_client.source.volume = volume / 100
         await ctx.send("Changed volume to {}%".format(volume))
+
+    @commands.command()
+    async def skip(self, ctx):
+        """Skips the current video in the queue"""
+
+        return await ctx.send('Skipped!')
+
 
     @commands.command()
     async def stop(self, ctx):
