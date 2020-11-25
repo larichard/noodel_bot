@@ -10,7 +10,7 @@ from discord.ext import commands
 from music import Music
 
 
-bot = commands.Bot(command_prefix=commands.when_mentioned_or("&"),
+bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"),
                    description='i am noodel bot')
 
 music_bot = Music(bot)
