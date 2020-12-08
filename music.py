@@ -19,17 +19,16 @@ ytdl_format_options = {
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
+    'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes    
 }
 
 ffmpeg_options = {
+    #before options fixes disconnect errors
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn'
 }
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
-
-#add queue to work as playlist
-
 
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, *, data, volume=0.5):
@@ -44,7 +43,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
     @classmethod
     async def from_url(cls, url, *, loop=None, stream=False):
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download = not stream))
 
         if 'entries' in data:
             # take first item from a playlist
@@ -57,7 +56,7 @@ class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.songs = asyncio.Queue()
-
+        self.is_playing = False
         # mutex for if current song is playing
         # clear if ready to play, set when processing next song
         self.play_next_song = asyncio.Event()
@@ -66,20 +65,26 @@ class Music(commands.Cog):
 
     async def audio_player_task(self):
         while True:
-            ctx, url = await self.songs.get()
-            # could problably move this back to play to allow for parallel downloads PogU
-            current = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
             self.play_next_song.clear()
-            self.current_song = url
-            ctx.voice_client.play(current, after=self.after_playing_song)
-            await self.play_next_song.wait()
+            ctx, current = await self.songs.get()
+            #play process
+            try:
+                self.current_song = current
+                self.is_playing = True    
+                ctx.voice_client.play(current, after=self.after_playing_song)
+                await ctx.send('Now playing: {} ({}m:{}s)'.format(current.title, (int(current.duration//60)), int(current.duration%60)))
+                await self.play_next_song.wait()
 
+            except youtube_dl.utils.DownloadError as e:    
+                await ctx.send('An error occurred while processing this request: {}'.format(str(e)))
+
+    #next song process
     def after_playing_song(self, error):
         if error:
             print("error during song")
             return
-
         self.play_next_song.set()
+        self.is_playing = False
         self.current_song = None
 
     @commands.command()
@@ -93,7 +98,7 @@ class Music(commands.Cog):
 
     @commands.command()
     async def play(self, ctx, *, url):
-        """Plays from a url (almost anything youtube_dl supports)"""
+        """Plays from a url (almost anything youtube_dl supports) or adds to queue"""
 
         if ctx.voice_client is None:
             if ctx.author.voice:
@@ -102,7 +107,11 @@ class Music(commands.Cog):
                 await ctx.send("You are not connected to a voice channel.")
                 raise commands.CommandError("Author not connected to a voice channel.")
 
-        await self.songs.put((ctx, url))
+        current = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
+
+        if self.is_playing:
+            await ctx.send( ('{} added to queue!').format(current.title) )
+        await self.songs.put((ctx, current))
 
     @commands.command()
     async def volume(self, ctx, volume: int):
@@ -115,20 +124,40 @@ class Music(commands.Cog):
         await ctx.send("Changed volume to {}%".format(volume))
 
     @commands.command()
-    async def skip(self, ctx):
-        """Skips the current video in the queue"""
+    async def pause(self, ctx):
+        """Pauses current item"""    
+        if self.is_playing:
+            ctx.voice_client.pause()
+            return await ctx.send('Paused!')
+        else:
+            return await ctx.send('Nothing is Playing!')
 
-        return await ctx.send('Skipped!')
+    @commands.command()
+    async def resume(self, ctx):
+        """Resumes currently paused item"""
+        if ctx.voice_client.is_paused and self.is_playing == True:
+            ctx.voice_client.resume()
+            return await ctx.send('Resumed!')
+        else:
+            return await ctx.send('Nothing is paused')
+
+    @commands.command()
+    async def skip(self, ctx):
+        """Skips the current item playing"""
+        if self.is_playing:
+            ctx.voice_client.stop()
+            return await ctx.send('Skipped!')
+        else:
+            return await ctx.send('Nothing is playing!')
 
     @commands.command()
     async def queue(self, ctx):
-        """Skips the current video in the queue"""
-
+        """Returns # of items in the queue"""
+        queue = ''
         return await ctx.send(f"{self.songs.qsize()} item(s) in queue")
 
     @commands.command()
     async def stop(self, ctx):
         """Stops and disconnects the bot from voice"""
-
         await ctx.voice_client.disconnect()
         return await ctx.send('watch liz and the blue bird')
