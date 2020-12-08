@@ -72,7 +72,7 @@ class Music(commands.Cog):
                 self.current_song = current
                 self.is_playing = True    
                 ctx.voice_client.play(current, after=self.after_playing_song)
-                await ctx.send('Now playing: {} ({}m:{}s)'.format(current.title, (int(current.duration//60)), int(current.duration%60)))
+                await ctx.send('Now playing: "{}" ({}m:{}s)'.format(current.title, (int(current.duration//60)), int(current.duration%60)))
                 await self.play_next_song.wait()
 
             except youtube_dl.utils.DownloadError as e:    
@@ -110,7 +110,7 @@ class Music(commands.Cog):
         current = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
 
         if self.is_playing:
-            await ctx.send( ('{} added to queue!').format(current.title) )
+            await ctx.send( ('Added {} to the queue!').format(current.title) )
         await self.songs.put((ctx, current))
 
     @commands.command()
@@ -152,9 +152,22 @@ class Music(commands.Cog):
 
     @commands.command()
     async def queue(self, ctx):
-        """Returns # of items in the queue"""
-        queue = ''
-        return await ctx.send(f"{self.songs.qsize()} item(s) in queue")
+        """Returns # and name of items in the queue"""
+        if self.songs.qsize() == 0:
+            return await ctx.send('Empty queue!')
+
+        queue = []
+        ret_to_songs = []
+        while not self.songs.empty():       
+            ctx, indiv = await self.songs.get()
+            queue.append(indiv)
+            ret_to_songs.append( (ctx, indiv) )
+        while ret_to_songs:
+            await self.songs.put( (ret_to_songs.pop(0)) )
+
+        await ctx.send('Queue:')
+        for i in queue:
+            await ctx.send( '{}. "{}" ({}m:{}s)'.format(queue.index(i) + 1, i.title, int(i.duration//60),  int(i.duration%60) ) )
 
     @commands.command()
     async def stop(self, ctx):
