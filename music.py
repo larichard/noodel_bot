@@ -110,7 +110,7 @@ class Music(commands.Cog):
         current = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
 
         if self.is_playing:
-            await ctx.send( ('Added {} to the queue! ({}m:{}s)').format(current.title), int(current.duration//60), int(current.duration%60) )
+            await ctx.send( 'Added {} to the queue! ({}m:{}s)'.format(current.title, int(current.duration//60), int(current.duration%60) ) )
         await self.songs.put((ctx, current))
 
     @commands.command()
