@@ -1,4 +1,6 @@
 import asyncio
+
+from discord.enums import ActivityType
 import reply
 import music
 import os
@@ -19,6 +21,7 @@ music_bot = Music(bot)
 async def on_ready():
     print('Logged in as {0} ({0.id})'.format(bot.user))
     print('------')
+    await bot.change_presence( activity = discord.Activity(type = ActivityType.listening, name = "!commands"))
     task = music_bot.audio_player_task()
     await bot.loop.create_task(task)
 

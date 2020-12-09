@@ -182,6 +182,7 @@ class Music(commands.Cog):
     @commands.command()
     async def np(self, ctx):
         """Returns currently playing song"""
+        #add a way to see how much time is left
         return await ctx.send( ':musical_note: Currently playing: {} ({}m:{}s)'.format(self.current_song.title, int(self.current_song.duration//60), int(self.current_song.duration%60) ) )
 
     @commands.command()
