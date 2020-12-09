@@ -110,7 +110,7 @@ class Music(commands.Cog):
         current = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
 
         if self.is_playing:
-            await ctx.send( ('Added {} to the queue!').format(current.title) )
+            await ctx.send( ('Added {} to the queue! ({}m:{}s)').format(current.title), int(current.duration//60), int(current.duration%60) )
         await self.songs.put((ctx, current))
 
     @commands.command()
@@ -154,8 +154,9 @@ class Music(commands.Cog):
     async def queue(self, ctx):
         """Returns # and name of items in the queue"""
         if self.songs.qsize() == 0:
-            return await ctx.send('Empty queue!')
+            return await ctx.send('Queue is empty!')
 
+        #probably a better way to do this
         queue = []
         ret_to_songs = []
         while not self.songs.empty():       
