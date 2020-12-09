@@ -72,7 +72,7 @@ class Music(commands.Cog):
                 self.current_song = current
                 self.is_playing = True    
                 ctx.voice_client.play(current, after=self.after_playing_song)
-                await ctx.send('Now playing: "{}" ({}m:{}s)'.format(current.title, (int(current.duration//60)), int(current.duration%60)))
+                await ctx.send(':musical_note: Now playing : "{}" ({}m:{}s)'.format(current.title, (int(current.duration//60)), int(current.duration%60)))
                 await self.play_next_song.wait()
 
             except youtube_dl.utils.DownloadError as e:    
@@ -110,7 +110,7 @@ class Music(commands.Cog):
         current = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
 
         if self.is_playing:
-            await ctx.send( 'Added {} to the queue! ({}m:{}s)'.format(current.title, int(current.duration//60), int(current.duration%60) ) )
+            await ctx.send( 'Added {} ({}m:{}s) to the queue at position {}'.format(current.title, int(current.duration//60), int(current.duration%60), self.songs.qsize()+1 ) )
         await self.songs.put((ctx, current))
 
     @commands.command()
@@ -128,16 +128,16 @@ class Music(commands.Cog):
         """Pauses current item"""    
         if self.is_playing:
             ctx.voice_client.pause()
-            return await ctx.send('Paused!')
+            return await ctx.send(':pause_button: Paused!')
         else:
             return await ctx.send('Nothing is Playing!')
 
     @commands.command()
     async def resume(self, ctx):
         """Resumes currently paused item"""
-        if ctx.voice_client.is_paused and self.is_playing == True:
+        if ctx.voice_client.is_paused and self.is_playing:
             ctx.voice_client.resume()
-            return await ctx.send('Resumed!')
+            return await ctx.send(':arrow_forward: Resumed!')
         else:
             return await ctx.send('Nothing is paused')
 
@@ -174,4 +174,19 @@ class Music(commands.Cog):
     async def stop(self, ctx):
         """Stops and disconnects the bot from voice"""
         await ctx.voice_client.disconnect()
+        #empties the queue
+        while not self.songs.empty():
+            await self.songs.get()
         return await ctx.send('watch liz and the blue bird')
+
+    @commands.command()
+    async def np(self, ctx):
+        """Returns currently playing song"""
+        return await ctx.send( ':musical_note: Currently playing: {} ({}m:{}s)'.format(self.current_song.title, int(self.current_song.duration//60), int(self.current_song.duration%60) ) )
+
+    @commands.command()
+    async def clear(self, ctx):
+        """Clears queue"""
+        while not self.songs.empty():
+            await self.songs.get()
+        return await ctx.send( 'Cleared the queue!')
