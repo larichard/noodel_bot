@@ -1,12 +1,13 @@
 import asyncio
 
+import time
 import discord
-import youtube_dl
+import yt_dlp
 
 from discord.ext import commands
 
 # Suppress noise about console usage from errors
-youtube_dl.utils.bug_reports_message = lambda: ''
+yt_dlp.utils.bug_reports_message = lambda: ''
 
 ytdl_format_options = {
     'format': 'bestaudio/best',
@@ -19,7 +20,8 @@ ytdl_format_options = {
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes    
+    'source_address': '0.0.0.0', # bind to ipv4 since ipv6 addresses cause issues sometimes  
+    'youtube_include_dash_manifest': False  
 }
 
 ffmpeg_options = {
@@ -28,7 +30,7 @@ ffmpeg_options = {
     'options': '-vn'
 }
 
-ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, *, data, volume=0.5):
@@ -53,9 +55,9 @@ class YTDLSource(discord.PCMVolumeTransformer):
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
 class Music(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot, songs: asyncio.Queue):
         self.bot = bot
-        self.songs = asyncio.Queue()
+        self.songs = songs
         self.is_playing = False
         # mutex for if current song is playing
         # clear if ready to play, set when processing next song
@@ -75,7 +77,7 @@ class Music(commands.Cog):
                 await ctx.send(':musical_note: Now playing : "{}" ({}m:{}s)'.format(current.title, (int(current.duration//60)), int(current.duration%60)))
                 await self.play_next_song.wait()
 
-            except youtube_dl.utils.DownloadError as e:    
+            except yt_dlp.utils.DownloadError as e:    
                 await ctx.send('An error occurred while processing this request: {}'.format(str(e)))
 
     #next song process
@@ -183,7 +185,8 @@ class Music(commands.Cog):
     async def np(self, ctx):
         """Returns currently playing song"""
         #add a way to see how much time is left
-        return await ctx.send( ':musical_note: Currently playing: {} ({}m:{}s)'.format(self.current_song.title, int(self.current_song.duration//60), int(self.current_song.duration%60) ) )
+        return await ctx.send( ':musical_note: Currently playing: {} ({}m:{}s)'.format(
+                               self.current_song.title, int(self.current_song.duration//60), int(self.current_song.duration%60) ) )
 
     @commands.command()
     async def clear(self, ctx):
